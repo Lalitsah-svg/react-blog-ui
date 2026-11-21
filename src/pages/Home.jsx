@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
-import { blogs } from "../data/blogs";
 import BlogCard from "../components/BlogCard";
+import heroImage from "../assets/hero.png";
+
+const API_URL = "http://localhost:3000/api/posts";
 
 function Home() {
   const [posts, setPosts] = useState([]);
@@ -11,31 +13,124 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const loadBlogs = () => {
-      try {
-        setLoading(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createMessage, setCreateMessage] = useState("");
+  const [createError, setCreateError] = useState("");
 
-        setTimeout(() => {
-          if (!blogs || blogs.length === 0) {
-            throw new Error("No blog posts available.");
-          }
+  const [formData, setFormData] = useState({
+    title: "",
+    content: "",
+    author: "Lalit Kumar"
+  });
 
-          setPosts(blogs);
-          setLoading(false);
-        }, 500);
-      } catch (err) {
-        setError(err.message);
-        setLoading(false);
+  const mapPostToBlog = (post) => ({
+    id: post.id,
+    title: post.title,
+    content: [post.content],
+    excerpt: post.content,
+    category: "Technology",
+    author: post.author || "Anonymous",
+    date: post.createdAt,
+    readTime: "3 min read",
+    image: heroImage,
+    tags: ["React", "API"],
+    featured: post.id === 1
+  });
+
+  const loadPosts = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(API_URL);
+
+      if (!response.ok) {
+        throw new Error("Failed to load blog posts.");
       }
-    };
 
-    loadBlogs();
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || "Failed to load blog posts.");
+      }
+
+      const formattedPosts = result.data.map(mapPostToBlog);
+
+      setPosts(formattedPosts);
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
   }, []);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCreatePost = async (e) => {
+    e.preventDefault();
+
+    setCreateMessage("");
+    setCreateError("");
+
+    if (!formData.title.trim() || !formData.content.trim()) {
+      setCreateError("Title and content are required.");
+      return;
+    }
+
+    try {
+      setCreateLoading(true);
+
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title: formData.title.trim(),
+          content: formData.content.trim(),
+          author: formData.author.trim() || "Anonymous"
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to create post.");
+      }
+
+      setCreateMessage("Post created successfully.");
+
+      setFormData({
+        title: "",
+        content: "",
+        author: "Lalit Kumar"
+      });
+
+      setShowCreateForm(false);
+
+      await loadPosts();
+    } catch (err) {
+      setCreateError(err.message || "Something went wrong.");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const categories = [
     "All",
-    ...new Set(blogs.map((blog) => blog.category)),
+    ...new Set(posts.map((blog) => blog.category))
   ];
 
   const filteredPosts = posts.filter((blog) => {
@@ -70,8 +165,96 @@ function Home() {
             Thoughtful stories on technology, design, products, and the
             people building the digital world.
           </p>
+
+          <button
+            type="button"
+            className="create-post-button"
+            onClick={() => {
+              setShowCreateForm((prev) => !prev);
+              setCreateMessage("");
+              setCreateError("");
+            }}
+          >
+            {showCreateForm ? "Close Form" : "+ Create New Post"}
+          </button>
         </div>
       </section>
+
+      {createMessage && (
+        <div className="success-message">
+          ✓ {createMessage}
+        </div>
+      )}
+
+      {showCreateForm && (
+        <section className="create-post-section">
+          <div className="create-post-card">
+            <div className="section-heading">
+              <div>
+                <span className="section-label">NEW ARTICLE</span>
+                <h2>Create a post</h2>
+              </div>
+            </div>
+
+            {createError && (
+              <div className="form-error">
+                {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreatePost}>
+              <div className="form-group">
+                <label htmlFor="title">Title</label>
+
+                <input
+                  id="title"
+                  name="title"
+                  type="text"
+                  placeholder="Enter post title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="author">Author</label>
+
+                <input
+                  id="author"
+                  name="author"
+                  type="text"
+                  placeholder="Enter author name"
+                  value={formData.author}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="content">Content</label>
+
+                <textarea
+                  id="content"
+                  name="content"
+                  rows="7"
+                  placeholder="Write your article..."
+                  value={formData.content}
+                  onChange={handleInputChange}
+                  required
+                ></textarea>
+              </div>
+
+              <button
+                type="submit"
+                className="submit-post-button"
+                disabled={createLoading}
+              >
+                {createLoading ? "Publishing..." : "Publish Post"}
+              </button>
+            </form>
+          </div>
+        </section>
+      )}
 
       {loading && (
         <div className="state-message">
